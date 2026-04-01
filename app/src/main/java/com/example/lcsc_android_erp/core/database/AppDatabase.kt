@@ -1,0 +1,31 @@
+package com.example.lcsc_android_erp.core.database
+
+import androidx.room.Database
+import androidx.room.RoomDatabase
+import com.example.lcsc_android_erp.core.database.dao.ComponentDao
+import com.example.lcsc_android_erp.core.database.dao.DashboardDao
+import com.example.lcsc_android_erp.core.database.dao.InventoryItemDao
+import com.example.lcsc_android_erp.core.database.dao.InventoryTransactionDao
+import com.example.lcsc_android_erp.core.database.dao.StorageLocationDao
+import com.example.lcsc_android_erp.core.database.entity.ComponentEntity
+import com.example.lcsc_android_erp.core.database.entity.InventoryItemEntity
+import com.example.lcsc_android_erp.core.database.entity.InventoryTransactionEntity
+import com.example.lcsc_android_erp.core.database.entity.StorageLocationEntity
+
+@Database(
+    entities = [
+        ComponentEntity::class,
+        StorageLocationEntity::class,
+        InventoryItemEntity::class,
+        InventoryTransactionEntity::class
+    ],
+    version = 4,
+    exportSchema = true
+)
+abstract class AppDatabase : RoomDatabase() {
+    abstract fun componentDao(): ComponentDao
+    abstract fun storageLocationDao(): StorageLocationDao
+    abstract fun inventoryItemDao(): InventoryItemDao
+    abstract fun inventoryTransactionDao(): InventoryTransactionDao
+    abstract fun dashboardDao(): DashboardDao
+}

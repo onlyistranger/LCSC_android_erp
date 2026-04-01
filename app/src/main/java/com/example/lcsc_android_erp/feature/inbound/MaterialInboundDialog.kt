@@ -1,0 +1,558 @@
+package com.example.lcsc_android_erp.feature.inbound
+
+import android.widget.Toast
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Card
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.DialogProperties
+import coil3.compose.AsyncImage
+import com.example.lcsc_android_erp.R
+import com.example.lcsc_android_erp.core.ui.performCopyFeedback
+import com.example.lcsc_android_erp.domain.model.ComponentDetail
+import com.example.lcsc_android_erp.domain.model.ExistingStockLocation
+import com.example.lcsc_android_erp.domain.model.StorageLocation
+
+@Composable
+fun MaterialInboundDialog(
+    title: String,
+    component: ComponentDetail?,
+    isLoading: Boolean,
+    loadingText: String,
+    errorMessage: String?,
+    existingStockLocations: List<ExistingStockLocation>,
+    quantityText: String,
+    quantityEditable: Boolean,
+    quantityLabel: String,
+    onQuantityChange: (String) -> Unit,
+    selectedLocationCode: String,
+    availableLocations: List<StorageLocation>,
+    onLocationSelected: (String) -> Unit,
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit,
+    confirmEnabled: Boolean,
+    confirmText: String,
+    locationPickerEnabled: Boolean = true,
+    selectedLocationLabelOverride: String? = null,
+    leadingActionText: String? = null,
+    onLeadingAction: (() -> Unit)? = null
+) {
+    var showLocationPicker by remember(title, selectedLocationCode, availableLocations) { mutableStateOf(false) }
+    var pendingLocationCode by remember(title, selectedLocationCode, availableLocations) {
+        mutableStateOf(selectedLocationCode)
+    }
+    val groupedLocations = remember(availableLocations) { materialInboundGroupLocations(availableLocations) }
+    val selectedLocationLabel = selectedLocationLabelOverride
+        ?: availableLocations.firstOrNull { it.code == selectedLocationCode }?.let {
+            materialInboundFormatLocationLabel(it.code, it.displayName)
+        }
+        ?: selectedLocationCode
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        modifier = Modifier.fillMaxWidth(),
+        properties = DialogProperties(usePlatformDefaultWidth = false),
+        title = { Text(text = title) },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 560.dp)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                when {
+                    isLoading -> {
+                        Card {
+                            Row(
+                                modifier = Modifier.padding(16.dp),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                CircularProgressIndicator(modifier = Modifier.height(20.dp))
+                                Text(text = loadingText)
+                            }
+                        }
+                    }
+
+                    else -> {
+                        errorMessage?.let { MaterialInboundMessageCard(text = it) }
+                        component?.let { currentComponent ->
+                            existingStockLocations
+                                .takeIf { it.isNotEmpty() }
+                                ?.let { ExistingStockReminderCard(existingStockLocations = it) }
+                            MaterialInboundComponentDetail(component = currentComponent)
+                            if (quantityEditable) {
+                                OutlinedTextField(
+                                    value = quantityText,
+                                    onValueChange = onQuantityChange,
+                                    modifier = Modifier.fillMaxWidth(),
+                                    label = { Text(text = quantityLabel) },
+                                    singleLine = true
+                                )
+                            } else {
+                                OutlinedTextField(
+                                    value = quantityText,
+                                    onValueChange = {},
+                                    modifier = Modifier.fillMaxWidth(),
+                                    label = { Text(text = quantityLabel) },
+                                    readOnly = true
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        dismissButton = {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                if (selectedLocationLabel.isNotBlank()) {
+                    TextButton(
+                        onClick = {
+                            pendingLocationCode = selectedLocationCode
+                            showLocationPicker = true
+                        },
+                        enabled = locationPickerEnabled && availableLocations.isNotEmpty() && component != null && !isLoading
+                    ) {
+                        Text(text = selectedLocationLabel)
+                    }
+                }
+                if (!leadingActionText.isNullOrBlank() && onLeadingAction != null) {
+                    TextButton(
+                        onClick = onLeadingAction
+                    ) {
+                        Text(text = leadingActionText)
+                    }
+                }
+                TextButton(onClick = onDismiss) {
+                    Text(text = stringResource(R.string.common_cancel))
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = onConfirm,
+                enabled = confirmEnabled && !isLoading && component != null
+            ) {
+                Text(text = confirmText)
+            }
+        }
+    )
+
+    if (showLocationPicker) {
+        AlertDialog(
+            onDismissRequest = { showLocationPicker = false },
+            modifier = Modifier.fillMaxWidth(),
+            properties = DialogProperties(usePlatformDefaultWidth = false),
+            title = { Text(text = stringResource(R.string.inbound_pick_location)) },
+            text = {
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 560.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    items(groupedLocations, key = { it.first }) { (letter, locations) ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            verticalAlignment = Alignment.Top
+                        ) {
+                            Text(
+                                text = letter,
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.width(24.dp)
+                            )
+                            Row(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .horizontalScroll(rememberScrollState()),
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                locations.forEach { location ->
+                                    MaterialInboundLocationCard(
+                                        location = location,
+                                        selected = location.code == pendingLocationCode,
+                                        onClick = {
+                                            pendingLocationCode = location.code
+                                            onLocationSelected(location.code)
+                                            showLocationPicker = false
+                                        },
+                                        modifier = Modifier.width(128.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            dismissButton = null,
+            confirmButton = {}
+        )
+    }
+}
+
+@Composable
+private fun MaterialInboundComponentDetail(
+    component: ComponentDetail
+) {
+    val density = LocalDensity.current
+    var firstPropertyHeightPx by remember(component.partNumber) { mutableStateOf(0) }
+    val firstPropertyRows = listOf(
+        stringResource(R.string.inbound_component_number) to component.partNumber,
+        stringResource(R.string.inbound_component_brand) to (component.brand ?: stringResource(R.string.inbound_field_empty)),
+        stringResource(R.string.inbound_component_package) to (component.packageName ?: stringResource(R.string.inbound_field_empty)),
+        stringResource(R.string.inbound_component_category) to (component.category ?: stringResource(R.string.inbound_field_empty))
+    )
+    val secondPropertyRows = buildList {
+        add(stringResource(R.string.inbound_component_name) to (component.name ?: stringResource(R.string.inbound_field_empty)))
+        component.specifications.forEach { (key, value) ->
+            val normalizedKey = key.trim()
+            val normalizedValue = value.trim()
+            if (normalizedKey.isNotEmpty() && normalizedValue.isNotEmpty()) {
+                add(normalizedKey to normalizedValue)
+            }
+        }
+        add(stringResource(R.string.inbound_component_price) to (component.price?.let { "¥$it" } ?: stringResource(R.string.inbound_field_empty)))
+        add(stringResource(R.string.inbound_component_description) to (component.description ?: stringResource(R.string.inbound_field_empty)))
+    }
+
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.Top
+        ) {
+            MaterialInboundImageCard(
+                component = component,
+                imageHeight = with(density) {
+                    if (firstPropertyHeightPx > 0) {
+                        firstPropertyHeightPx.toDp()
+                    } else {
+                        168.dp
+                    }
+                }
+            )
+            MaterialInboundFirstPropertyCard(
+                rows = firstPropertyRows,
+                modifier = Modifier
+                    .weight(1f)
+                    .onSizeChanged { size ->
+                        firstPropertyHeightPx = size.height
+                    }
+            )
+        }
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(10.dp)
+                .clip(MaterialTheme.shapes.small)
+                .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
+        )
+        MaterialInboundKeyValueCard(rows = secondPropertyRows)
+    }
+}
+
+@Composable
+private fun MaterialInboundImageCard(
+    component: ComponentDetail,
+    imageHeight: androidx.compose.ui.unit.Dp
+) {
+    Card(
+        modifier = Modifier.width(168.dp)
+    ) {
+        val imageUrl = component.imageUrl?.takeIf { it.isNotBlank() }
+        if (imageUrl != null) {
+            AsyncImage(
+                model = imageUrl,
+                contentDescription = component.name ?: component.partNumber,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(imageHeight)
+                    .background(MaterialTheme.colorScheme.surfaceVariant),
+                contentScale = ContentScale.Fit
+            )
+        } else {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(imageHeight)
+                    .background(MaterialTheme.colorScheme.surfaceVariant),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = component.partNumber,
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.padding(8.dp)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun MaterialInboundFirstPropertyCard(
+    rows: List<Pair<String, String>>,
+    modifier: Modifier = Modifier
+) {
+    Card(modifier = modifier) {
+        Column(modifier = Modifier.fillMaxWidth()) {
+            rows.forEachIndexed { index, (label, value) ->
+                MaterialInboundFirstPropertyCell(
+                    label = label,
+                    value = value,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                if (index != rows.lastIndex) {
+                    HorizontalDivider()
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun MaterialInboundFirstPropertyCell(
+    label: String,
+    value: String,
+    modifier: Modifier = Modifier
+) {
+    val context = LocalContext.current
+    val clipboardManager = LocalClipboardManager.current
+    val hapticFeedback = LocalHapticFeedback.current
+
+    Column(
+        modifier = modifier
+            .combinedClickable(
+                onClick = {},
+                onLongClick = {
+                    clipboardManager.setText(AnnotatedString(value))
+                    performCopyFeedback(context, hapticFeedback)
+                    Toast.makeText(
+                        context,
+                        context.getString(R.string.common_copied, value),
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }
+            )
+            .padding(horizontal = 12.dp, vertical = 5.dp),
+        verticalArrangement = Arrangement.spacedBy(1.dp)
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Text(
+            text = value,
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 2
+        )
+    }
+}
+
+@Composable
+private fun MaterialInboundKeyValueCard(
+    rows: List<Pair<String, String>>,
+    modifier: Modifier = Modifier
+) {
+    Card(modifier = modifier) {
+        Column(modifier = Modifier.fillMaxWidth()) {
+            rows.forEachIndexed { index, (label, value) ->
+                MaterialInboundKeyValueRow(
+                    label = label,
+                    value = value
+                )
+                if (index != rows.lastIndex) {
+                    HorizontalDivider()
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun MaterialInboundKeyValueRow(
+    label: String,
+    value: String
+) {
+    val context = LocalContext.current
+    val clipboardManager = LocalClipboardManager.current
+    val hapticFeedback = LocalHapticFeedback.current
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .combinedClickable(
+                onClick = {},
+                onLongClick = {
+                    clipboardManager.setText(AnnotatedString(value))
+                    performCopyFeedback(context, hapticFeedback)
+                    Toast.makeText(
+                        context,
+                        context.getString(R.string.common_copied, value),
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }
+            )
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalAlignment = Alignment.Top
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.width(76.dp)
+        )
+        Text(
+            text = value,
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.weight(1f)
+        )
+    }
+}
+
+@Composable
+private fun MaterialInboundMessageCard(text: String) {
+    Card {
+        Text(
+            text = text,
+            modifier = Modifier.padding(16.dp),
+            style = MaterialTheme.typography.bodyMedium
+        )
+    }
+}
+
+@Composable
+private fun MaterialInboundLocationCard(
+    location: StorageLocation,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        onClick = onClick,
+        modifier = modifier,
+        border = if (selected) BorderStroke(2.dp, MaterialTheme.colorScheme.primary) else null
+    ) {
+        val backgroundColor = materialInboundLocationColor(location.colorHex)
+        val contentColor = if (backgroundColor.luminance() > 0.6f) Color.Black else Color.White
+
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(backgroundColor)
+                .padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Text(
+                text = location.displayName?.takeIf { it.isNotBlank() } ?: location.code,
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+                color = contentColor
+            )
+            Text(
+                text = location.code,
+                style = MaterialTheme.typography.bodySmall,
+                color = contentColor.copy(alpha = 0.88f)
+            )
+        }
+    }
+}
+
+private fun materialInboundGroupLocations(
+    locations: List<StorageLocation>
+): List<Pair<String, List<StorageLocation>>> {
+    return locations
+        .sortedWith(
+            compareBy<StorageLocation>(
+                { materialInboundRowIndex(it.code) },
+                { materialInboundColumnIndex(it.code) },
+                { it.code }
+            )
+        )
+        .groupBy { materialInboundRowLabel(it.code) }
+        .toList()
+        .sortedBy { it.first }
+}
+
+private fun materialInboundRowLabel(code: String): String {
+    return code.takeWhile { it.isLetter() }.ifBlank { "#" }
+}
+
+private fun materialInboundRowIndex(code: String): Int {
+    return code.firstOrNull()?.uppercaseChar()?.code ?: Int.MAX_VALUE
+}
+
+private fun materialInboundColumnIndex(code: String): Int {
+    return code.dropWhile { it.isLetter() }.toIntOrNull() ?: Int.MAX_VALUE
+}
+
+private fun materialInboundFormatLocationLabel(code: String, displayName: String?): String {
+    val normalizedName = displayName?.trim().orEmpty()
+    return if (normalizedName.isNotEmpty() && normalizedName != code) {
+        "$code:$normalizedName"
+    } else {
+        code
+    }
+}
+
+@Composable
+private fun materialInboundLocationColor(colorHex: String?): Color {
+    val fallback = MaterialTheme.colorScheme.surfaceVariant
+    return try {
+        if (colorHex.isNullOrBlank()) fallback else Color(android.graphics.Color.parseColor(colorHex))
+    } catch (_: IllegalArgumentException) {
+        fallback
+    }
+}
