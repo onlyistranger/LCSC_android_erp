@@ -10,6 +10,7 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import com.example.lcsc_android_erp.core.AppContainer
 import com.example.lcsc_android_erp.R
 import com.example.lcsc_android_erp.core.network.isNetworkAvailable
+import com.example.lcsc_android_erp.core.datastore.UserPreferencesRepository
 import com.example.lcsc_android_erp.domain.model.LocationInventoryItem
 import com.example.lcsc_android_erp.domain.model.StockLocationCell
 import com.example.lcsc_android_erp.domain.model.StorageLocationSortMode
@@ -34,6 +35,7 @@ import java.util.Locale
 class InventoryViewModel(
     private val inventoryRepository: InventoryRepository,
     private val lcscCatalogRepository: LcscCatalogRepository,
+    private val userPreferencesRepository: UserPreferencesRepository,
     private val appContext: Context
 ) : ViewModel() {
     private val selectedLocation = MutableStateFlow<StockLocationCell?>(null)
@@ -98,11 +100,13 @@ class InventoryViewModel(
 
     val uiState: StateFlow<InventoryUiState> = combine(
         baseUiStateFlow,
-        settingsLocationItemsFlow
-    ) { baseState, settingsItems ->
+        settingsLocationItemsFlow,
+        userPreferencesRepository.preferences
+    ) { baseState, settingsItems, preferences ->
         baseState.copy(
             selectedLocationItems = baseState.selectedLocationItems,
-            settingsLocationSortAttributes = supportedSpecificationKeys(settingsItems)
+            settingsLocationSortAttributes = supportedSpecificationKeys(settingsItems),
+            recentLocationColors = preferences.recentLocationColors
         )
     }.stateIn(
         scope = viewModelScope,
@@ -400,12 +404,19 @@ class InventoryViewModel(
         }
     }
 
+    fun addRecentLocationColor(colorHex: String) {
+        viewModelScope.launch {
+            userPreferencesRepository.addRecentLocationColor(colorHex)
+        }
+    }
+
     companion object {
         fun factory(appContainer: AppContainer): ViewModelProvider.Factory = viewModelFactory {
             initializer {
                 InventoryViewModel(
                     inventoryRepository = appContainer.inventoryRepository,
                     lcscCatalogRepository = appContainer.lcscCatalogRepository,
+                    userPreferencesRepository = appContainer.userPreferencesRepository,
                     appContext = appContainer.appContext
                 )
             }

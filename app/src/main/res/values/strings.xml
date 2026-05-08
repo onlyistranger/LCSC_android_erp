@@ -117,7 +117,7 @@
     <string name="search_mode_bom">BOM搜索</string>
     <string name="search_keyword_label">搜索本地库存</string>
     <string name="search_keyword_placeholder">输入料号、名称、品牌、封装、库位</string>
-    <string name="search_result_summary">当前显示 %1$d 条结果，共 %2$d 条库存记录</string>
+    <string name="search_result_summary">共 %1$d 条库存记录</string>
     <string name="search_page_summary">第 %1$d / %2$d 页，共 %3$d 条物料</string>
     <string name="search_previous_page">上一页</string>
     <string name="search_next_page">下一页</string>
@@ -175,7 +175,7 @@
     <string name="inventory_card_body">当前库存页保留为骨架页面，后续将连接 Room 查询、条件筛选、库存明细和流水记录。</string>
     <string name="inventory_add_location">新增库位</string>
     <string name="inventory_add_location_label">库位编码</string>
-    <string name="inventory_add_location_hint">例如 A1、C3。当前仅允许 1 个字母 + 1 个数字（1-9）。</string>
+    <string name="inventory_add_location_hint">例如 C0、A10。格式为 1 个字母 + 数字，数字可包含 0。</string>
     <string name="inventory_cell_count">%1$d 种物料</string>
     <string name="inventory_cell_summary">%1$s:%2$d种物料</string>
     <string name="inventory_item_quantity">库存数量：%1$s</string>
@@ -184,7 +184,7 @@
     <string name="inventory_open_source">打开来源链接</string>
     <string name="inventory_open_source_failed">无法打开来源链接</string>
     <string name="inventory_location_code">仓库编号</string>
-    <string name="inventory_location_code_hint">例如 A1、C3，格式固定为 1 个字母 + 1 个数字。</string>
+    <string name="inventory_location_code_hint">例如 C0、A10，格式为 1 个字母 + 数字，数字可包含 0。</string>
     <string name="inventory_location_name">库位名称</string>
     <string name="inventory_location_color">库位颜色</string>
     <string name="inventory_location_pick_color">选择颜色</string>
@@ -228,13 +228,13 @@
     <string name="inventory_save_quantity">保存数量</string>
     <string name="inventory_transfer_location">转移仓库</string>
     <string name="inventory_delete_item">删除物料</string>
-    <string name="inventory_add_location_invalid">库位编码必须是 A1-C9 这种格式，且不能重复。</string>
+    <string name="inventory_add_location_invalid">库位编码必须是 1 个字母 + 数字（可包含 0），且不能重复。</string>
     <string name="inventory_transfer_items_empty">请选择要转移的物料和目标仓库。</string>
     <string name="inventory_delete_items_empty">请先选择要删除的物料。</string>
     <string name="inventory_scan_invalid_qr">当前二维码不是可识别的立创入库标签格式。</string>
     <string name="inventory_scan_component_not_found">已识别二维码，但未从立创商城查询到料号 %1$s 的物料信息。</string>
     <string name="inventory_error_location_not_found">仓库不存在。</string>
-    <string name="inventory_error_location_code_format">仓库编号必须是 A1、C3 这种格式。</string>
+    <string name="inventory_error_location_code_format">仓库编号必须是 1 个字母 + 数字（可包含 0），例如 C0、A10。</string>
     <string name="inventory_error_location_code_exists">仓库编号已存在。</string>
     <string name="inventory_error_location_has_items">仓库中仍有物料，不能删除。</string>
     <string name="inventory_error_quantity_negative">数量不能小于 0。</string>

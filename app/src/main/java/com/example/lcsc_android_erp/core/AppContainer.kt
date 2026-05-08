@@ -80,7 +80,8 @@ class AppContainer(context: Context) {
         inventoryItemDao = database.inventoryItemDao(),
         inventoryTransactionDao = database.inventoryTransactionDao(),
         componentEnrichmentManager = componentEnrichmentManager,
-        componentImageStore = componentImageStore
+        componentImageStore = componentImageStore,
+        userPreferencesRepository = userPreferencesRepository
     )
 
     val lcscCatalogRepository: LcscCatalogRepository = LcscCatalogRepositoryImpl(

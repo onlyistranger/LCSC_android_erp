@@ -41,7 +41,7 @@ class InventoryRepositoryImpl(
 ) : InventoryRepository {
     private companion object {
         private const val TAG = "InventoryRepository"
-        private val LOCATION_CODE_REGEX = Regex("^[A-Z][1-9]$")
+        private val LOCATION_CODE_REGEX = Regex("^[A-Z]\\d+$")
     }
 
     override fun observeDashboardSummary(): Flow<DashboardSummary> {
@@ -155,7 +155,7 @@ class InventoryRepositoryImpl(
             .mapNotNull(::parseManualInboundIndex)
             .toList()
         val nextIndex = parsedIndexes.maxOrNull()?.plus(1) ?: 1
-        val nextPartNumber = "C${nextIndex.toString().padStart(2, '0')}"
+        val nextPartNumber = formatManualInboundPartNumber(nextIndex)
         Log.d(
             TAG,
             "getNextManualInboundPartNumber inStockC0PartNumbers=$inStockC0PrefixedPartNumbers, parsedIndexes=$parsedIndexes, nextPartNumber=$nextPartNumber"
@@ -566,7 +566,11 @@ private fun parseManualInboundIndex(partNumber: String?): Int? {
     return partNumber
         ?.trim()
         ?.uppercase()
-        ?.takeIf { it.matches(Regex("^C\\d+$")) }
-        ?.removePrefix("C")
+        ?.takeIf { it.matches(Regex("^C0\\d+$")) }
+        ?.removePrefix("C0")
         ?.toIntOrNull()
+}
+
+private fun formatManualInboundPartNumber(index: Int): String {
+    return "C0$index"
 }

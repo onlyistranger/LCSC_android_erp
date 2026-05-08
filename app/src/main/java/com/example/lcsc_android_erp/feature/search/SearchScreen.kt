@@ -21,15 +21,20 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.KeyboardArrowUp
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Tab
@@ -38,6 +43,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -93,7 +99,6 @@ fun SearchRoute(
         uiState = uiState,
         onModeChange = viewModel::updateMode,
         onQueryChange = viewModel::updateQuery,
-        onPreviousPage = viewModel::goToPreviousPage,
         onNextPage = viewModel::goToNextPage,
         onBomFilterChange = viewModel::updateBomFilter,
         onIgnoreBomEntry = viewModel::ignoreBomEntry,
@@ -117,7 +122,6 @@ fun SearchScreen(
     uiState: SearchUiState,
     onModeChange: (SearchMode) -> Unit,
     onQueryChange: (String) -> Unit,
-    onPreviousPage: () -> Unit,
     onNextPage: () -> Unit,
     onBomFilterChange: (BomMatchFilter) -> Unit,
     onIgnoreBomEntry: (BomSearchEntry) -> Unit,
@@ -137,10 +141,28 @@ fun SearchScreen(
     val context = LocalContext.current
     val resolver = context.contentResolver
     val scope = rememberCoroutineScope()
+    val listState = rememberLazyListState()
     var selectedSearchResult by remember { mutableStateOf<SearchResultUiModel?>(null) }
     var selectedSearchRecord by remember { mutableStateOf<SearchInventoryRecord?>(null) }
     var bindingTargetEntry by remember { mutableStateOf<BomSearchEntry?>(null) }
     var directInboundTargetEntry by remember { mutableStateOf<BomSearchEntry?>(null) }
+    val showScrollToTop by remember {
+        derivedStateOf {
+            listState.firstVisibleItemIndex > 2 ||
+                listState.firstVisibleItemScrollOffset > 600
+        }
+    }
+    val shouldLoadNextManualPage by remember(uiState.mode, uiState.currentPage, uiState.pageCount) {
+        derivedStateOf {
+            if (uiState.mode != SearchMode.Manual || uiState.currentPage >= uiState.pageCount) {
+                false
+            } else {
+                val lastVisibleIndex = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index
+                    ?: return@derivedStateOf false
+                lastVisibleIndex >= listState.layoutInfo.totalItemsCount - 3
+            }
+        }
+    }
     val bomPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
     ) { uri ->
@@ -168,225 +190,218 @@ fun SearchScreen(
         }
     }
 
-    LazyColumn(
-        modifier = modifier.fillMaxSize(),
-        contentPadding = PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-        item {
-            Text(
-                text = stringResource(R.string.search_title),
-                style = MaterialTheme.typography.headlineMedium,
-                fontWeight = FontWeight.Bold
-            )
+    LaunchedEffect(shouldLoadNextManualPage) {
+        if (shouldLoadNextManualPage) {
+            onNextPage()
         }
+    }
 
-        item {
-            SearchModeTabs(
-                mode = uiState.mode,
-                onModeChange = onModeChange
-            )
-        }
-
-        when (uiState.mode) {
-            SearchMode.Manual -> {
-                item {
-                    OutlinedTextField(
-                        value = uiState.query,
-                        onValueChange = onQueryChange,
-                        modifier = Modifier.fillMaxWidth(),
-                        label = { Text(text = stringResource(R.string.search_keyword_label)) },
-                        placeholder = { Text(text = stringResource(R.string.search_keyword_placeholder)) },
-                        singleLine = true
-                    )
-                }
-
-                item {
-                    Text(
-                        text = stringResource(
-                            R.string.search_result_summary,
-                            uiState.pagedResults.size,
-                            uiState.inventoryRecordCount
-                        ),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-
-                if (uiState.results.isNotEmpty()) {
-                    item {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = stringResource(
-                                    R.string.search_page_summary,
-                                    uiState.currentPage,
-                                    uiState.pageCount,
-                                    uiState.results.size
-                                ),
-                                style = MaterialTheme.typography.bodyMedium
-                            )
-                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                TextButton(
-                                    onClick = onPreviousPage,
-                                    enabled = uiState.currentPage > 1
-                                ) {
-                                    Text(text = stringResource(R.string.search_previous_page))
-                                }
-                                TextButton(
-                                    onClick = onNextPage,
-                                    enabled = uiState.currentPage < uiState.pageCount
-                                ) {
-                                    Text(text = stringResource(R.string.search_next_page))
-                                }
-                            }
-                        }
-                    }
-                }
-
-                if (uiState.results.isEmpty()) {
-                    item {
-                        MessageCard(text = stringResource(R.string.search_empty))
-                    }
-                } else {
-                    items(uiState.pagedResults, key = { it.partNumber + (it.mpn ?: "") }) { item ->
-                        SearchResultCard(
-                            item = item,
-                            showTotalQuantity = false,
-                            onClick = {
-                                if (item.records.size == 1) {
-                                    selectedSearchRecord = item.records.first()
-                                } else {
-                                    selectedSearchResult = item
-                                }
-                            }
-                        )
-                    }
-                }
+    Box(modifier = modifier.fillMaxSize()) {
+        LazyColumn(
+            state = listState,
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            item {
+                Text(
+                    text = stringResource(R.string.search_title),
+                    style = MaterialTheme.typography.headlineMedium,
+                    fontWeight = FontWeight.Bold
+                )
             }
 
-            SearchMode.Bom -> {
-                item {
-                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Button(
-                            onClick = {
-                                bomPickerLauncher.launch(
-                                    arrayOf(
-                                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                                        "application/vnd.ms-excel"
-                                    )
-                                )
-                            },
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text(text = stringResource(R.string.search_bom_pick_file))
-                        }
-                        uiState.bomFileName?.let { fileName ->
-                            Text(
-                                text = stringResource(R.string.search_bom_file_name, fileName),
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-                }
+            item {
+                SearchModeTabs(
+                    mode = uiState.mode,
+                    onModeChange = onModeChange
+                )
+            }
 
-                if (uiState.isParsingBom) {
+            when (uiState.mode) {
+                SearchMode.Manual -> {
                     item {
-                        Card {
-                            Row(
-                                modifier = Modifier.padding(16.dp),
-                                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                CircularProgressIndicator(modifier = Modifier.size(20.dp))
-                                Text(text = stringResource(R.string.search_bom_parsing))
-                            }
-                        }
-                    }
-                }
-
-                uiState.bomError?.let { message ->
-                    item {
-                        MessageCard(text = message)
-                    }
-                }
-
-                if (!uiState.isParsingBom && uiState.bomFileName == null && uiState.bomError == null) {
-                    item {
-                        MessageCard(text = stringResource(R.string.search_bom_empty_hint))
-                    }
-                }
-
-                if (uiState.bomRows.isNotEmpty()) {
-                    item {
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            FilterChip(
-                                selected = uiState.bomFilter == BomMatchFilter.All,
-                                onClick = { onBomFilterChange(BomMatchFilter.All) },
-                                label = { Text(text = stringResource(R.string.search_bom_filter_all)) }
-                            )
-                            FilterChip(
-                                selected = uiState.bomFilter == BomMatchFilter.Matched,
-                                onClick = {
-                                    onBomFilterChange(
-                                        if (uiState.bomFilter == BomMatchFilter.Matched) {
-                                            BomMatchFilter.All
-                                        } else {
-                                            BomMatchFilter.Matched
-                                        }
-                                    )
-                                },
-                                label = { Text(text = stringResource(R.string.search_bom_filter_matched)) }
-                            )
-                            FilterChip(
-                                selected = uiState.bomFilter == BomMatchFilter.Unmatched,
-                                onClick = {
-                                    onBomFilterChange(
-                                        if (uiState.bomFilter == BomMatchFilter.Unmatched) {
-                                            BomMatchFilter.All
-                                        } else {
-                                            BomMatchFilter.Unmatched
-                                        }
-                                    )
-                                },
-                                label = { Text(text = stringResource(R.string.search_bom_filter_unmatched)) }
-                            )
-                        }
+                        OutlinedTextField(
+                            value = uiState.query,
+                            onValueChange = onQueryChange,
+                            modifier = Modifier.fillMaxWidth(),
+                            label = { Text(text = stringResource(R.string.search_keyword_label)) },
+                            placeholder = { Text(text = stringResource(R.string.search_keyword_placeholder)) },
+                            singleLine = true
+                        )
                     }
 
                     item {
                         Text(
                             text = stringResource(
-                                R.string.search_bom_summary,
-                                uiState.bomRows.size,
-                                uiState.bomMatchedCount
+                                R.string.search_result_summary,
+                                uiState.inventoryRecordCount
                             ),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
 
-                    items(uiState.bomRows, key = { it.entry.rowNumber + "|" + (it.entry.supplierPart ?: it.entry.manufacturerPart ?: "") }) { row ->
-                        BomSearchRowCard(
-                            row = row,
-                            onIgnore = { onIgnoreBomEntry(row.entry) },
-                            onBind = { bindingTargetEntry = row.entry },
-                            onResultClick = { record -> selectedSearchRecord = record },
-                            onResultGroupClick = { result -> selectedSearchResult = result },
-                            onDirectInbound = {
-                                if (!row.entry.supplierPart.isNullOrBlank()) {
-                                    directInboundTargetEntry = row.entry
+                    if (uiState.results.isEmpty()) {
+                        item {
+                            MessageCard(text = stringResource(R.string.search_empty))
+                        }
+                    } else {
+                        items(uiState.pagedResults, key = { it.partNumber + (it.mpn ?: "") }) { item ->
+                            SearchResultCard(
+                                item = item,
+                                showTotalQuantity = false,
+                                onClick = {
+                                    if (item.records.size == 1) {
+                                        selectedSearchRecord = item.records.first()
+                                    } else {
+                                        selectedSearchResult = item
+                                    }
                                 }
-                            }
-                        )
+                            )
+                        }
                     }
                 }
+
+                SearchMode.Bom -> {
+                    item {
+                        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            Button(
+                                onClick = {
+                                    bomPickerLauncher.launch(
+                                        arrayOf(
+                                            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                                            "application/vnd.ms-excel"
+                                        )
+                                    )
+                                },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text(text = stringResource(R.string.search_bom_pick_file))
+                            }
+                            uiState.bomFileName?.let { fileName ->
+                                Text(
+                                    text = stringResource(R.string.search_bom_file_name, fileName),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
+
+                    if (uiState.isParsingBom) {
+                        item {
+                            Card {
+                                Row(
+                                    modifier = Modifier.padding(16.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    CircularProgressIndicator(modifier = Modifier.size(20.dp))
+                                    Text(text = stringResource(R.string.search_bom_parsing))
+                                }
+                            }
+                        }
+                    }
+
+                    uiState.bomError?.let { message ->
+                        item {
+                            MessageCard(text = message)
+                        }
+                    }
+
+                    if (!uiState.isParsingBom && uiState.bomFileName == null && uiState.bomError == null) {
+                        item {
+                            MessageCard(text = stringResource(R.string.search_bom_empty_hint))
+                        }
+                    }
+
+                    if (uiState.bomRows.isNotEmpty()) {
+                        item {
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                FilterChip(
+                                    selected = uiState.bomFilter == BomMatchFilter.All,
+                                    onClick = { onBomFilterChange(BomMatchFilter.All) },
+                                    label = { Text(text = stringResource(R.string.search_bom_filter_all)) }
+                                )
+                                FilterChip(
+                                    selected = uiState.bomFilter == BomMatchFilter.Matched,
+                                    onClick = {
+                                        onBomFilterChange(
+                                            if (uiState.bomFilter == BomMatchFilter.Matched) {
+                                                BomMatchFilter.All
+                                            } else {
+                                                BomMatchFilter.Matched
+                                            }
+                                        )
+                                    },
+                                    label = { Text(text = stringResource(R.string.search_bom_filter_matched)) }
+                                )
+                                FilterChip(
+                                    selected = uiState.bomFilter == BomMatchFilter.Unmatched,
+                                    onClick = {
+                                        onBomFilterChange(
+                                            if (uiState.bomFilter == BomMatchFilter.Unmatched) {
+                                                BomMatchFilter.All
+                                            } else {
+                                                BomMatchFilter.Unmatched
+                                            }
+                                        )
+                                    },
+                                    label = { Text(text = stringResource(R.string.search_bom_filter_unmatched)) }
+                                )
+                            }
+                        }
+
+                        item {
+                            Text(
+                                text = stringResource(
+                                    R.string.search_bom_summary,
+                                    uiState.bomRows.size,
+                                    uiState.bomMatchedCount
+                                ),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+
+                        items(uiState.bomRows, key = { it.entry.rowNumber + "|" + (it.entry.supplierPart ?: it.entry.manufacturerPart ?: "") }) { row ->
+                            BomSearchRowCard(
+                                row = row,
+                                onIgnore = { onIgnoreBomEntry(row.entry) },
+                                onBind = { bindingTargetEntry = row.entry },
+                                onResultClick = { record -> selectedSearchRecord = record },
+                                onResultGroupClick = { result -> selectedSearchResult = result },
+                                onDirectInbound = {
+                                    if (!row.entry.supplierPart.isNullOrBlank()) {
+                                        directInboundTargetEntry = row.entry
+                                    }
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+        }
+        if (showScrollToTop) {
+            FloatingActionButton(
+                onClick = {
+                    scope.launch {
+                        listState.animateScrollToItem(0)
+                    }
+                },
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(20.dp)
+                    .size(52.dp),
+                shape = CircleShape
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.KeyboardArrowUp,
+                    contentDescription = null
+                )
             }
         }
     }

@@ -78,7 +78,6 @@ class SearchViewModel(
         val groupedResults = groupRecords(filteredRecords)
         val pageCount = maxOf(1, (groupedResults.size + PAGE_SIZE - 1) / PAGE_SIZE)
         val safePage = page.coerceIn(1, pageCount)
-        val startIndex = (safePage - 1) * PAGE_SIZE
         val allBomRows = buildBomRows(
             inventoryRecords = bindingContext.records,
             document = bomDocument,
@@ -91,7 +90,7 @@ class SearchViewModel(
             query = queryText,
             allInventoryResults = allInventoryResults,
             results = groupedResults,
-            pagedResults = groupedResults.drop(startIndex).take(PAGE_SIZE),
+            pagedResults = groupedResults.take(safePage * PAGE_SIZE),
             inventoryRecordCount = bindingContext.records.size,
             currentPage = safePage,
             pageCount = pageCount,
@@ -264,10 +263,6 @@ class SearchViewModel(
             )
             onCompleted(null)
         }
-    }
-
-    fun goToPreviousPage() {
-        currentPage.update { page -> (page - 1).coerceAtLeast(1) }
     }
 
     fun goToNextPage() {

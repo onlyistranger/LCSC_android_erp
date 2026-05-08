@@ -110,7 +110,7 @@
     <string name="search_mode_bom">BOM Search</string>
     <string name="search_keyword_label">Search Local Inventory</string>
     <string name="search_keyword_placeholder">Enter part number, name, brand, package, or location</string>
-    <string name="search_result_summary">Showing %1$d results from %2$d inventory records</string>
+    <string name="search_result_summary">%1$d inventory records total</string>
     <string name="search_page_summary">Page %1$d / %2$d, %3$d materials total</string>
     <string name="search_previous_page">Previous</string>
     <string name="search_next_page">Next</string>
@@ -168,7 +168,7 @@
     <string name="inventory_card_body">The inventory page is still a shell and will later connect Room queries, filters, inventory details, and transaction history.</string>
     <string name="inventory_add_location">Add Location</string>
     <string name="inventory_add_location_label">Location Code</string>
-    <string name="inventory_add_location_hint">For example A1 or C3. Only one letter + one digit (1-9) is currently allowed.</string>
+    <string name="inventory_add_location_hint">For example C0 or A10. Use one letter followed by digits; 0 is allowed.</string>
     <string name="inventory_cell_count">%1$d item types</string>
     <string name="inventory_cell_summary">%1$s: %2$d item types</string>
     <string name="inventory_item_quantity">Quantity: %1$s</string>
@@ -177,7 +177,7 @@
     <string name="inventory_open_source">Open source link</string>
     <string name="inventory_open_source_failed">Unable to open source link</string>
     <string name="inventory_location_code">Location Code</string>
-    <string name="inventory_location_code_hint">For example A1 or C3. The format is fixed to one letter + one digit.</string>
+    <string name="inventory_location_code_hint">For example C0 or A10. Use one letter followed by digits; 0 is allowed.</string>
     <string name="inventory_location_name">Location Name</string>
     <string name="inventory_location_color">Location Color</string>
     <string name="inventory_location_pick_color">Pick Color</string>
@@ -221,13 +221,13 @@
     <string name="inventory_save_quantity">Save Quantity</string>
     <string name="inventory_transfer_location">Transfer Location</string>
     <string name="inventory_delete_item">Delete Material</string>
-    <string name="inventory_add_location_invalid">Location code must use the A1-C9 format and must be unique.</string>
+    <string name="inventory_add_location_invalid">Location code must be one letter followed by digits, may include 0, and must be unique.</string>
     <string name="inventory_transfer_items_empty">Select materials to transfer and choose a target location.</string>
     <string name="inventory_delete_items_empty">Select at least one material to delete.</string>
     <string name="inventory_scan_invalid_qr">This QR code is not a supported LCSC inbound label.</string>
     <string name="inventory_scan_component_not_found">The QR code was recognized, but no LCSC component information was found for part number %1$s.</string>
     <string name="inventory_error_location_not_found">Location not found.</string>
-    <string name="inventory_error_location_code_format">Location code must use the A1 or C3 format.</string>
+    <string name="inventory_error_location_code_format">Location code must be one letter followed by digits, may include 0, such as C0 or A10.</string>
     <string name="inventory_error_location_code_exists">Location code already exists.</string>
     <string name="inventory_error_location_has_items">This location still contains materials and cannot be deleted.</string>
     <string name="inventory_error_quantity_negative">Quantity cannot be less than 0.</string>

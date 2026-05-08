@@ -12,6 +12,7 @@ data class UserPreferences(
     val appLanguageTag: String = UserPreferencesRepository.LANGUAGE_ZH,
     val recentManualSearches: List<String> = emptyList(),
     val bomPartBindings: Map<String, String> = emptyMap(),
+    val recentLocationColors: List<String> = emptyList(),
     val printerType: String = UserPreferencesRepository.PRINTER_TYPE_AUTO
 )
 
@@ -24,6 +25,10 @@ class UserPreferencesRepository(
             appLanguageTag = preferences[APP_LANGUAGE_TAG] ?: LANGUAGE_ZH,
             recentManualSearches = parseRecentManualSearches(preferences[RECENT_MANUAL_SEARCHES]),
             bomPartBindings = parseBomPartBindings(preferences[BOM_PART_BINDINGS]),
+            recentLocationColors = parseRecentLocationColors(
+                value = preferences[RECENT_LOCATION_COLORS],
+                usePresetFallback = true
+            ),
             printerType = preferences[PRINTER_TYPE]
                 ?.takeIf { it == PRINTER_TYPE_AUTO || it == PRINTER_TYPE_DELI_Q5 }
                 ?: PRINTER_TYPE_AUTO
@@ -89,12 +94,67 @@ class UserPreferencesRepository(
         }
     }
 
+    suspend fun addRecentLocationColor(colorHex: String) {
+        val normalized = normalizeLocationColor(colorHex) ?: return
+        dataStore.edit { preferences ->
+            val current = parseRecentLocationColors(
+                value = preferences[RECENT_LOCATION_COLORS],
+                usePresetFallback = true
+            )
+            val updated = buildList {
+                add(normalized)
+                current.forEach { item ->
+                    if (!item.equals(normalized, ignoreCase = true)) {
+                        add(item)
+                    }
+                }
+            }.take(5)
+            preferences[RECENT_LOCATION_COLORS] = updated.joinToString("\n")
+        }
+    }
+
+    suspend fun setRecentLocationColors(colors: List<String>) {
+        val normalized = colors
+            .mapNotNull(::normalizeLocationColor)
+            .distinct()
+            .take(5)
+        dataStore.edit { preferences ->
+            if (normalized.isEmpty()) {
+                preferences -= RECENT_LOCATION_COLORS
+            } else {
+                preferences[RECENT_LOCATION_COLORS] = normalized.joinToString("\n")
+            }
+        }
+    }
+
     private fun parseRecentManualSearches(value: String?): List<String> {
         return value
             ?.split('\n')
             ?.map(String::trim)
             ?.filter { it.isNotEmpty() }
             .orEmpty()
+    }
+
+    private fun parseRecentLocationColors(
+        value: String?,
+        usePresetFallback: Boolean = false
+    ): List<String> {
+        val parsed = value
+            ?.split('\n')
+            ?.mapNotNull(::normalizeLocationColor)
+            ?.distinct()
+            ?.take(5)
+            .orEmpty()
+        return if (parsed.isEmpty() && usePresetFallback) {
+            PRESET_LOCATION_COLORS
+        } else {
+            parsed
+        }
+    }
+
+    private fun normalizeLocationColor(colorHex: String): String? {
+        val normalized = colorHex.trim().uppercase()
+        return normalized.takeIf { it.matches(Regex("^#[0-9A-F]{6}$")) }
     }
 
     private fun parseBomPartBindings(value: String?): Map<String, String> {
@@ -124,9 +184,12 @@ class UserPreferencesRepository(
         val APP_LANGUAGE_TAG = stringPreferencesKey("app_language_tag")
         val RECENT_MANUAL_SEARCHES = stringPreferencesKey("recent_manual_searches")
         val BOM_PART_BINDINGS = stringPreferencesKey("bom_part_bindings")
+        val RECENT_LOCATION_COLORS = stringPreferencesKey("recent_location_colors")
         val PRINTER_TYPE = stringPreferencesKey("printer_type")
 
         const val PRINTER_TYPE_AUTO = "auto"
         const val PRINTER_TYPE_DELI_Q5 = "deli_q5"
+
+        val PRESET_LOCATION_COLORS = listOf("#C8E6C9", "#B3E5FC", "#F8BBD0", "#D1C4E9", "#FFE0B2")
     }
 }

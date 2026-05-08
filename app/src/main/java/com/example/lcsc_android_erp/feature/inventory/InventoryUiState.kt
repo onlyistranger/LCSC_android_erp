@@ -12,6 +12,7 @@ data class InventoryUiState(
     val selectedLocationItems: List<LocationInventoryItem> = emptyList(),
     val pendingOpenRequest: InventoryOpenRequest? = null,
     val settingsLocationSortAttributes: List<String> = emptyList(),
+    val recentLocationColors: List<String> = emptyList(),
     val addMaterialSearchResults: List<ComponentDetail> = emptyList(),
     val isSearchingAddMaterial: Boolean = false,
     val addMaterialSearchError: String? = null,

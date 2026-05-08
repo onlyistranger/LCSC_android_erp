@@ -13,10 +13,12 @@ import com.example.lcsc_android_erp.core.database.dao.StorageLocationDao
 import com.example.lcsc_android_erp.core.database.entity.ComponentEntity
 import com.example.lcsc_android_erp.core.database.entity.InventoryItemEntity
 import com.example.lcsc_android_erp.core.database.entity.StorageLocationEntity
+import com.example.lcsc_android_erp.core.datastore.UserPreferencesRepository
 import com.example.lcsc_android_erp.domain.model.StorageLocationSortMode
 import java.io.File
 import java.io.IOException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import org.apache.poi.ss.usermodel.Cell
 import org.apache.poi.ss.usermodel.CellType
@@ -38,7 +40,8 @@ class InventoryBackupManager(
     private val inventoryItemDao: InventoryItemDao,
     private val inventoryTransactionDao: InventoryTransactionDao,
     private val componentEnrichmentManager: ComponentEnrichmentManager,
-    private val componentImageStore: ComponentImageStore
+    private val componentImageStore: ComponentImageStore,
+    private val userPreferencesRepository: UserPreferencesRepository
 ) {
     private data class ImportedComponentRow(
         val entity: ComponentEntity,
@@ -58,6 +61,9 @@ class InventoryBackupManager(
             val appVersionCode = PackageInfoCompat.getLongVersionCode(packageInfo).toString()
 
             val storageLocations = database.withTransaction { storageLocationDao.getAll() }
+            val recentLocationColors = userPreferencesRepository.preferences
+                .first()
+                .recentLocationColors
             val inventoryItems = database.withTransaction { inventoryItemDao.getAll() }
             val referencedComponentIds = inventoryItems
                 .asSequence()
@@ -88,6 +94,10 @@ class InventoryBackupManager(
                 writeRow(
                     2,
                     listOf("appVersionCode", appVersionCode)
+                )
+                writeRow(
+                    3,
+                    listOf("recentLocationColors", recentLocationColors.joinToString("\n"))
                 )
             }
 
@@ -199,7 +209,9 @@ class InventoryBackupManager(
                     return@use context.getString(R.string.settings_backup_unsupported_version)
                 }
 
+                val metaSheet = wb.getSheet("meta")
                 val storageLocations = wb.getSheet("storage_locations").toStorageLocations()
+                val recentLocationColors = metaSheet.toRecentLocationColors()
                 val componentSheet = wb.getSheet("components")
                 val importedComponents = componentSheet.toComponents(componentSheet.extractPreviewImagesByRow())
                 val components = importedComponents.map { it.entity }
@@ -220,6 +232,9 @@ class InventoryBackupManager(
                     if (inventoryItems.isNotEmpty()) {
                         inventoryItemDao.insertAll(inventoryItems)
                     }
+                }
+                if (recentLocationColors.isNotEmpty()) {
+                    userPreferencesRepository.setRecentLocationColors(recentLocationColors)
                 }
                 componentEnrichmentManager.scheduleAll(
                     importedComponents
@@ -262,6 +277,26 @@ class InventoryBackupManager(
                 createdAt = row.long("createdAt")
             )
         }
+    }
+
+    private fun org.apache.poi.ss.usermodel.Sheet?.toRecentLocationColors(): List<String> {
+        val sheet = this ?: return emptyList()
+        val rawValue = (0..sheet.lastRowNum)
+            .asSequence()
+            .mapNotNull { rowIndex -> sheet.getRow(rowIndex) }
+            .firstOrNull { row ->
+                row.getCell(0)?.asString()?.trim() == "recentLocationColors"
+            }
+            ?.getCell(1)
+            ?.asString()
+            ?: return emptyList()
+        return rawValue
+            .split('\n')
+            .map(String::trim)
+            .filter { it.matches(Regex("^#[0-9A-Fa-f]{6}$")) }
+            .map(String::uppercase)
+            .distinct()
+            .take(5)
     }
 
     private suspend fun org.apache.poi.ss.usermodel.Sheet?.toComponents(

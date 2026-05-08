@@ -9,6 +9,8 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material.icons.outlined.Check
+import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Print
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.foundation.background
@@ -164,7 +166,8 @@ fun InventoryRoute(
         onTransferInventoryItems = viewModel::transferInventoryItems,
         onDeleteInventoryItems = viewModel::deleteInventoryItems,
         onOpenInventoryItem = viewModel::openInventoryItem,
-        onOpenInventoryItemHandled = viewModel::clearPendingOpenRequest
+        onOpenInventoryItemHandled = viewModel::clearPendingOpenRequest,
+        onAddRecentLocationColor = viewModel::addRecentLocationColor
     )
 }
 
@@ -192,6 +195,7 @@ fun InventoryScreen(
     onDeleteInventoryItems: (List<Long>, (String?) -> Unit) -> Unit,
     onOpenInventoryItem: (String, String) -> Unit,
     onOpenInventoryItemHandled: () -> Unit,
+    onAddRecentLocationColor: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
     var addLocationDialogVisible by remember { mutableStateOf(false) }
@@ -298,6 +302,7 @@ fun InventoryScreen(
                 onDeleteInventoryItems = onDeleteInventoryItems,
                 onOpenInventoryItem = onOpenInventoryItem,
                 onOpenInventoryItemHandled = onOpenInventoryItemHandled,
+                onAddRecentLocationColor = onAddRecentLocationColor,
                 modifier = Modifier.weight(1f)
             )
         }
@@ -306,6 +311,7 @@ fun InventoryScreen(
     if (addLocationDialogVisible) {
         AddLocationDialog(
             errorMessage = uiState.addLocationError,
+            recentLocationColors = uiState.recentLocationColors,
             onDismiss = {
                 onClearAddLocationError()
                 addLocationDialogVisible = false
@@ -314,7 +320,8 @@ fun InventoryScreen(
             onConfirm = { code, displayName, colorHex ->
                 addLocationSubmitted = true
                 onAddLocation(code, displayName, colorHex)
-            }
+            },
+            onAddRecentLocationColor = onAddRecentLocationColor
         )
     }
 
@@ -323,6 +330,7 @@ fun InventoryScreen(
             cell = cell,
             errorMessage = uiState.updateLocationError,
             availableSecondaryAttributes = uiState.settingsLocationSortAttributes,
+            recentLocationColors = uiState.recentLocationColors,
             onDismiss = {
                 onClearUpdateLocationError()
                 onCloseLocationSettings()
@@ -342,6 +350,7 @@ fun InventoryScreen(
                     }
                 }
             },
+            onAddRecentLocationColor = onAddRecentLocationColor,
             onDelete = {
                 onDeleteLocation(cell.id) { error ->
                     if (error == null) {
@@ -367,14 +376,16 @@ fun InventoryScreen(
 @Composable
 private fun AddLocationDialog(
     errorMessage: String?,
+    recentLocationColors: List<String>,
     onDismiss: () -> Unit,
-    onConfirm: (String, String?, String?) -> Unit
+    onConfirm: (String, String?, String?) -> Unit,
+    onAddRecentLocationColor: (String) -> Unit
 ) {
     var locationCode by remember { mutableStateOf("") }
     var displayName by remember { mutableStateOf("") }
     var colorHex by remember { mutableStateOf("") }
     var showColorWheelDialog by remember { mutableStateOf(false) }
-    val quickColors = listOf("", "#C8E6C9", "#B3E5FC", "#F8BBD0", "#D1C4E9")
+    val quickColors = remember(recentLocationColors) { buildLocationQuickColors(recentLocationColors) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -383,7 +394,7 @@ private fun AddLocationDialog(
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 OutlinedTextField(
                     value = locationCode,
-                    onValueChange = { locationCode = it.uppercase().filter { ch -> ch.isLetterOrDigit() }.take(2) },
+                    onValueChange = { locationCode = it.uppercase().filter { ch -> ch.isLetterOrDigit() } },
                     modifier = Modifier.fillMaxWidth(),
                     label = { Text(text = stringResource(R.string.inventory_add_location_label)) },
                     supportingText = {
@@ -457,6 +468,7 @@ private fun AddLocationDialog(
             initialColorHex = colorHex,
             onDismiss = { showColorWheelDialog = false },
             onConfirm = { pickedColor ->
+                onAddRecentLocationColor(pickedColor)
                 colorHex = pickedColor
                 showColorWheelDialog = false
             }
@@ -578,6 +590,7 @@ private fun InventoryLocationDetailScreen(
     onDeleteInventoryItems: (List<Long>, (String?) -> Unit) -> Unit,
     onOpenInventoryItem: (String, String) -> Unit,
     onOpenInventoryItemHandled: () -> Unit,
+    onAddRecentLocationColor: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -847,6 +860,7 @@ private fun InventoryLocationDetailScreen(
             cell = cell,
             errorMessage = uiState.updateLocationError,
             availableSecondaryAttributes = supportedSortAttributes(items, cell.sortMode),
+            recentLocationColors = uiState.recentLocationColors,
             onDismiss = {
                 onClearUpdateLocationError()
                 showSettingsDialog = false
@@ -864,6 +878,7 @@ private fun InventoryLocationDetailScreen(
                     }
                 }
             },
+            onAddRecentLocationColor = onAddRecentLocationColor,
             onDelete = {
                 onDeleteLocation(cell.id) { error ->
                     if (error == null) {
@@ -1352,8 +1367,10 @@ private fun LocationSettingsDialog(
     cell: StockLocationCell,
     errorMessage: String?,
     availableSecondaryAttributes: List<String>,
+    recentLocationColors: List<String>,
     onDismiss: () -> Unit,
     onSave: (String, String?, String?, String) -> Unit,
+    onAddRecentLocationColor: (String) -> Unit,
     onDelete: () -> Unit,
     onForceDelete: () -> Unit
 ) {
@@ -1364,7 +1381,7 @@ private fun LocationSettingsDialog(
     var showColorWheelDialog by remember(cell.id) { mutableStateOf(false) }
     var deleteSubmitted by remember(cell.id) { mutableStateOf(false) }
     var deleteBlockedMessage by remember(cell.id) { mutableStateOf<String?>(null) }
-    val quickColors = listOf("", "#C8E6C9", "#B3E5FC", "#F8BBD0", "#D1C4E9")
+    val quickColors = remember(recentLocationColors) { buildLocationQuickColors(recentLocationColors) }
     val specificationSortOptions = remember(availableSecondaryAttributes, sortPriorities) {
         buildList {
             availableSecondaryAttributes
@@ -1398,7 +1415,7 @@ private fun LocationSettingsDialog(
                 OutlinedTextField(
                     value = code,
                     onValueChange = {
-                        code = it.uppercase().filter { ch -> ch.isLetterOrDigit() }.take(2)
+                        code = it.uppercase().filter { ch -> ch.isLetterOrDigit() }
                     },
                     modifier = Modifier.fillMaxWidth(),
                     label = { Text(text = stringResource(R.string.inventory_location_code)) }
@@ -1416,13 +1433,13 @@ private fun LocationSettingsDialog(
                         fontWeight = FontWeight.SemiBold
                     )
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    quickColors.forEach { color ->
-                        ColorQuickButton(
-                            colorHex = color,
-                            selected = colorHex == color,
-                            onClick = { colorHex = color }
-                        )
-                    }
+                        quickColors.forEach { color ->
+                            ColorQuickButton(
+                                colorHex = color,
+                                selected = colorHex == color,
+                                onClick = { colorHex = color }
+                            )
+                        }
                         IconButton(
                             onClick = { showColorWheelDialog = true },
                             modifier = Modifier
@@ -1557,6 +1574,7 @@ private fun LocationSettingsDialog(
             initialColorHex = colorHex,
             onDismiss = { showColorWheelDialog = false },
             onConfirm = { pickedColor ->
+                onAddRecentLocationColor(pickedColor)
                 colorHex = pickedColor
                 showColorWheelDialog = false
             }
@@ -1625,20 +1643,22 @@ private fun ColorWheelDialog(
                         .background(selectedColor)
                         .border(1.dp, MaterialTheme.colorScheme.outline, MaterialTheme.shapes.medium)
                 )
-                Text(
-                    text = colorToHex(selectedColor),
-                    style = MaterialTheme.typography.bodyMedium
-                )
             }
         },
         confirmButton = {
-            TextButton(onClick = { onConfirm(colorToHex(selectedColor)) }) {
-                Text(text = stringResource(R.string.common_confirm))
+            IconButton(onClick = { onConfirm(colorToHex(selectedColor)) }) {
+                Icon(
+                    imageVector = Icons.Outlined.Check,
+                    contentDescription = stringResource(R.string.common_confirm)
+                )
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text(text = stringResource(R.string.common_cancel))
+            IconButton(onClick = onDismiss) {
+                Icon(
+                    imageVector = Icons.Outlined.Close,
+                    contentDescription = stringResource(R.string.common_cancel)
+                )
             }
         }
     )
@@ -1862,6 +1882,18 @@ private fun toggleInventorySelection(
         current - inventoryItemId
     } else {
         current + inventoryItemId
+    }
+}
+
+private fun buildLocationQuickColors(recentLocationColors: List<String>): List<String> {
+    return buildList {
+        add("")
+        recentLocationColors
+            .map(String::trim)
+            .filter { it.matches(Regex("^#[0-9A-Fa-f]{6}$")) }
+            .distinctBy { it.uppercase(Locale.ROOT) }
+            .take(5)
+            .forEach { add(it.uppercase(Locale.ROOT)) }
     }
 }
 
