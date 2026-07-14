@@ -33,3 +33,6 @@ uni-appX/
 .backup/
 
 
+tools/cli/data
+tools/cli/output
+

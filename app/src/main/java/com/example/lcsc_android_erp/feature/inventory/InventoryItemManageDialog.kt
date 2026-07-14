@@ -6,13 +6,17 @@ import android.widget.Toast
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.OpenInNew
 import androidx.compose.material.icons.automirrored.outlined.Undo
+import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -21,6 +25,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -114,7 +119,50 @@ fun InventoryItemManageDialog(
         secondPropertyRows = secondPropertyRows,
         onDismiss = onDismiss,
         dismissButtons = {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                FilledIconButton(
+                    onClick = {
+                        actionError = null
+                        isSubmitting = true
+                        onDelete(item.inventoryItemId) { error ->
+                            isSubmitting = false
+                            actionError = error
+                            if (error == null) {
+                                onDismiss()
+                            }
+                        }
+                    },
+                    colors = IconButtonDefaults.filledIconButtonColors(
+                        containerColor = MaterialTheme.colorScheme.error,
+                        contentColor = MaterialTheme.colorScheme.background
+                    ),
+                    modifier = Modifier.size(40.dp),
+                    shape = MaterialTheme.shapes.medium,
+                    enabled = !isSubmitting
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.Delete,
+                        contentDescription = stringResource(R.string.inventory_delete_item),
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+                Spacer(modifier = Modifier.weight(1f))
+                TextButton(
+                    onClick = {
+                        actionError = null
+                        if (availableLocations.isEmpty()) {
+                            actionError = context.getString(R.string.inventory_no_available_locations)
+                            return@TextButton
+                        }
+                        showTransferPicker = true
+                    },
+                    enabled = !isSubmitting && availableLocations.isNotEmpty()
+                ) {
+                    Text(text = stringResource(R.string.inventory_transfer_location))
+                }
                 TextButton(
                     onClick = {
                         actionError = null
@@ -147,38 +195,6 @@ fun InventoryItemManageDialog(
                     enabled = !isSubmitting
                 ) {
                     Text(text = stringResource(R.string.common_close))
-                }
-                TextButton(
-                    onClick = {
-                        actionError = null
-                        if (availableLocations.isEmpty()) {
-                            actionError = context.getString(R.string.inventory_no_available_locations)
-                            return@TextButton
-                        }
-                        showTransferPicker = true
-                    },
-                    enabled = !isSubmitting && availableLocations.isNotEmpty()
-                ) {
-                    Text(text = stringResource(R.string.inventory_transfer_location))
-                }
-                TextButton(
-                    onClick = {
-                        actionError = null
-                        isSubmitting = true
-                        onDelete(item.inventoryItemId) { error ->
-                            isSubmitting = false
-                            actionError = error
-                            if (error == null) {
-                                onDismiss()
-                            }
-                        }
-                    },
-                    enabled = !isSubmitting
-                ) {
-                    Text(
-                        text = stringResource(R.string.inventory_delete_item),
-                        color = MaterialTheme.colorScheme.error
-                    )
                 }
             }
         }

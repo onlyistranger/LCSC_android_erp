@@ -5,6 +5,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -13,11 +14,14 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -26,6 +30,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -88,57 +93,73 @@ fun SettingsScreen(
         uri?.let(onImportInventory)
     }
 
-    LazyColumn(
-        modifier = modifier.fillMaxSize(),
-        contentPadding = PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-        item {
-            Text(
-                text = uiState.content.title,
-                style = MaterialTheme.typography.headlineMedium,
-                fontWeight = FontWeight.Bold
-            )
-        }
-
-        item {
-            Column {
-                SettingsActionRow(
-                    title = uiState.content.languageTitle,
-                    subtitle = when (uiState.selectedLanguageTag) {
-                        UserPreferencesRepository.LANGUAGE_EN -> uiState.content.languageEnglish
-                        else -> uiState.content.languageChinese
-                    },
-                    onClick = { showLanguageDialog = true }
-                )
-                HorizontalDivider()
-                SettingsActionRow(
-                    title = uiState.content.aboutTitle,
-                    subtitle = uiState.content.aboutSummary,
-                    onClick = { showAboutDialog = true }
-                )
-                HorizontalDivider()
-                SettingsActionRow(
-                    title = uiState.content.exportInventoryTitle,
-                    subtitle = uiState.content.exportInventorySummary,
-                    onClick = { exportLauncher.launch(buildInventoryExportFileName()) },
-                    enabled = !uiState.isProcessingInventoryBackup
-                )
-                HorizontalDivider()
-                SettingsActionRow(
-                    title = uiState.content.importInventoryTitle,
-                    subtitle = uiState.content.importInventorySummary,
-                    onClick = {
-                        importLauncher.launch(
-                            arrayOf(
-                                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                                "*/*"
-                            )
-                        )
-                    },
-                    enabled = !uiState.isProcessingInventoryBackup
+    Box(modifier = modifier.fillMaxSize()) {
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(
+                start = 16.dp,
+                top = 16.dp,
+                end = 16.dp,
+                bottom = if (uiState.inventoryBackupProgress == null) 16.dp else 88.dp
+            ),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            item {
+                Text(
+                    text = uiState.content.title,
+                    style = MaterialTheme.typography.headlineMedium,
+                    fontWeight = FontWeight.Bold
                 )
             }
+
+            item {
+                Column {
+                    SettingsActionRow(
+                        title = uiState.content.languageTitle,
+                        subtitle = when (uiState.selectedLanguageTag) {
+                            UserPreferencesRepository.LANGUAGE_EN -> uiState.content.languageEnglish
+                            else -> uiState.content.languageChinese
+                        },
+                        onClick = { showLanguageDialog = true }
+                    )
+                    HorizontalDivider()
+                    SettingsActionRow(
+                        title = uiState.content.aboutTitle,
+                        subtitle = uiState.content.aboutSummary,
+                        onClick = { showAboutDialog = true }
+                    )
+                    HorizontalDivider()
+                    SettingsActionRow(
+                        title = uiState.content.exportInventoryTitle,
+                        subtitle = uiState.content.exportInventorySummary,
+                        onClick = { exportLauncher.launch(buildInventoryExportFileName()) },
+                        enabled = !uiState.isProcessingInventoryBackup
+                    )
+                    HorizontalDivider()
+                    SettingsActionRow(
+                        title = uiState.content.importInventoryTitle,
+                        subtitle = uiState.content.importInventorySummary,
+                        onClick = {
+                            importLauncher.launch(
+                                arrayOf(
+                                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                                    "*/*"
+                                )
+                            )
+                        },
+                        enabled = !uiState.isProcessingInventoryBackup
+                    )
+                }
+            }
+        }
+
+        uiState.inventoryBackupProgress?.let { progress ->
+            BackupProgressBar(
+                progress = progress,
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+            )
         }
     }
 
@@ -172,6 +193,40 @@ fun SettingsScreen(
                 }
             }
         )
+    }
+}
+
+@Composable
+private fun BackupProgressBar(
+    progress: Float,
+    modifier: Modifier = Modifier
+) {
+    val progressPercent = (progress * 100f).toInt().coerceIn(0, 100)
+    Surface(
+        modifier = modifier,
+        color = MaterialTheme.colorScheme.surface,
+        tonalElevation = 3.dp,
+        shadowElevation = 3.dp
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Text(
+                text = stringResource(R.string.settings_inventory_backup_progress),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            LinearProgressIndicator(
+                progress = { progress },
+                modifier = Modifier.fillMaxWidth()
+            )
+            Text(
+                text = "$progressPercent%",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
     }
 }
 
@@ -292,19 +347,23 @@ private fun AboutDialog(
         title = { Text(text = content.aboutTitle) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(
-                    text = stringResource(R.string.app_name),
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold
-                )
-                Text(
-                    text = stringResource(R.string.settings_about_version, versionName),
-                    style = MaterialTheme.typography.bodyMedium
-                )
-                Text(
-                    text = content.aboutBody,
-                    style = MaterialTheme.typography.bodyMedium
-                )
+                SelectionContainer {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(
+                            text = stringResource(R.string.app_name),
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Text(
+                            text = stringResource(R.string.settings_about_version, versionName),
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                        Text(
+                            text = content.aboutBody,
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
+                }
                 StaticLinkText(
                     label = "github",
                     url = GITHUB_URL,
@@ -316,11 +375,13 @@ private fun AboutDialog(
                     onClick = { openExternalUrl(context, GITEE_URL) }
                 )
                 if (content.stackBody.isNotBlank()) {
-                    Text(
-                        text = content.stackBody,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    SelectionContainer {
+                        Text(
+                            text = content.stackBody,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
             }
         },

@@ -232,7 +232,8 @@ fun InventoryScreen(
                         Text(
                             text = stringResource(R.string.inventory_title),
                             style = MaterialTheme.typography.headlineMedium,
-                            fontWeight = FontWeight.Bold
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(start = 10.dp, top = 10.dp, end = 10.dp)
                         )
                     }
 

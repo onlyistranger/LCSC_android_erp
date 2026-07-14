@@ -19,6 +19,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 class SettingsViewModel(
@@ -58,13 +59,25 @@ class SettingsViewModel(
             screenState.update {
                 it.copy(
                     isProcessingInventoryBackup = true,
+                    inventoryBackupProgress = 0f,
                     inventoryBackupMessage = null
                 )
             }
-            val error = inventoryBackupManager.exportToUri(uri)
+            val error = inventoryBackupManager.exportToUri(uri) { processed, total ->
+                screenState.update { state ->
+                    state.copy(
+                        inventoryBackupProgress = if (total > 0) {
+                            processed.toFloat() / total.toFloat()
+                        } else {
+                            null
+                        }
+                    )
+                }
+            }
             screenState.update {
                 it.copy(
                     isProcessingInventoryBackup = false,
+                    inventoryBackupProgress = null,
                     inventoryBackupMessage = error ?: appContext.getString(R.string.settings_export_inventory_success)
                 )
             }
@@ -76,13 +89,27 @@ class SettingsViewModel(
             screenState.update {
                 it.copy(
                     isProcessingInventoryBackup = true,
+                    inventoryBackupProgress = 0f,
                     inventoryBackupMessage = null
                 )
             }
-            val error = inventoryBackupManager.importFromUri(uri)
+            // Give Compose a frame to draw the progress bar before POI starts parsing the file.
+            delay(100)
+            val error = inventoryBackupManager.importFromUri(uri) { processed, total ->
+                screenState.update { state ->
+                    state.copy(
+                        inventoryBackupProgress = if (total > 0) {
+                            processed.toFloat() / total.toFloat()
+                        } else {
+                            null
+                        }
+                    )
+                }
+            }
             screenState.update {
                 it.copy(
                     isProcessingInventoryBackup = false,
+                    inventoryBackupProgress = null,
                     inventoryBackupMessage = error ?: appContext.getString(R.string.settings_import_inventory_success)
                 )
             }

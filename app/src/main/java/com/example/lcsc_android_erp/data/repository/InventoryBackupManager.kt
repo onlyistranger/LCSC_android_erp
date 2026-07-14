@@ -28,12 +28,10 @@ import org.apache.poi.ss.usermodel.CellType
 import org.apache.poi.ss.usermodel.ClientAnchor
 import org.apache.poi.ss.usermodel.Row
 import org.apache.poi.ss.usermodel.Workbook
-import org.apache.poi.ss.usermodel.WorkbookFactory
 import org.apache.poi.xssf.usermodel.XSSFClientAnchor
 import org.apache.poi.xssf.usermodel.XSSFPicture
 import org.apache.poi.xssf.usermodel.XSSFSheet
 import org.apache.poi.xssf.usermodel.XSSFWorkbook
-import org.json.JSONObject
 
 class InventoryBackupManager(
     private val context: Context,
@@ -60,7 +58,10 @@ class InventoryBackupManager(
         val sourceName: String?
     )
 
-    suspend fun exportToUri(uri: Uri): String? = withContext(Dispatchers.IO) {
+    suspend fun exportToUri(
+        uri: Uri,
+        onComponentsProgress: ((processed: Int, total: Int) -> Unit)? = null
+    ): String? = withContext(Dispatchers.IO) {
         runCatching {
             val workbook = XSSFWorkbook()
             val packageInfo = context.packageManager.getPackageInfo(context.packageName, 0)
@@ -76,15 +77,6 @@ class InventoryBackupManager(
                 .asSequence()
                 .map(InventoryItemEntity::componentId)
                 .toSet()
-            val initialComponents = database.withTransaction {
-                componentDao.getAll().filter { it.id in referencedComponentIds }
-            }
-            val missingDetails = initialComponents
-                .filter(::requiresExportEnrichment)
-                .map(ComponentEntity::partNumber)
-            if (missingDetails.isNotEmpty()) {
-                componentEnrichmentManager.enrichNow(missingDetails)
-            }
             val components = database.withTransaction {
                 componentDao.getAll().filter { it.id in referencedComponentIds }
             }
@@ -128,6 +120,10 @@ class InventoryBackupManager(
 
             workbook.createSheet("components").apply {
                 val imageColumnIndex = 11
+                val totalComponents = components.size
+                if (totalComponents > 0) {
+                    onComponentsProgress?.invoke(0, totalComponents)
+                }
                 writeRow(
                     0,
                     listOf(
@@ -146,19 +142,20 @@ class InventoryBackupManager(
                 )
                 components.forEachIndexed { index, item ->
                     val rowIndex = index + 1
+                    val exportItem = enrichComponentForExportIfNeeded(item)
                     writeRow(
                         rowIndex,
                         listOf(
-                            item.id,
-                            item.partNumber,
-                            item.name,
-                            item.brand,
-                            item.packageName,
-                            item.category,
-                            item.specJson,
-                            item.description,
-                            item.sourceUrl,
-                            item.updatedAt,
+                            exportItem.id,
+                            exportItem.partNumber,
+                            exportItem.name,
+                            exportItem.brand,
+                            exportItem.packageName,
+                            exportItem.category,
+                            exportItem.specJson,
+                            exportItem.description,
+                            exportItem.sourceUrl,
+                            exportItem.updatedAt,
                             null
                         )
                     )
@@ -166,8 +163,9 @@ class InventoryBackupManager(
                         workbook = workbook,
                         rowIndex = rowIndex,
                         imageColumnIndex = imageColumnIndex,
-                        imageLocalPath = item.imageLocalPath
+                        imageLocalPath = exportItem.imageLocalPath
                     )
+                    onComponentsProgress?.invoke(rowIndex, totalComponents)
                 }
                 setColumnWidth(imageColumnIndex, 18 * 256)
             }
@@ -199,10 +197,13 @@ class InventoryBackupManager(
         }
     }
 
-    suspend fun importFromUri(uri: Uri): String? = withContext(Dispatchers.IO) {
+    suspend fun importFromUri(
+        uri: Uri,
+        onComponentsProgress: ((processed: Int, total: Int) -> Unit)? = null
+    ): String? = withContext(Dispatchers.IO) {
         runCatching {
             val workbook = context.contentResolver.openInputStream(uri)?.use { inputStream ->
-                WorkbookFactory.create(inputStream)
+                XSSFWorkbook(inputStream)
             } ?: throw IOException(context.getString(R.string.settings_backup_open_import_failed))
 
             workbook.use { wb ->
@@ -220,7 +221,10 @@ class InventoryBackupManager(
                 val storageLocations = wb.getSheet("storage_locations").toStorageLocations()
                 val recentLocationColors = metaSheet.toRecentLocationColors()
                 val componentSheet = wb.getSheet("components")
-                val importedComponents = componentSheet.toComponents(componentSheet.extractPreviewImagesByRow())
+                val importedComponents = componentSheet.toComponents(
+                    previewImagesByRow = componentSheet.extractPreviewImagesByRow(),
+                    onComponentsProgress = onComponentsProgress
+                )
                 val components = importedComponents.map { it.entity }
                 val inventoryItems = wb.getSheet("inventory_items").toInventoryItems()
 
@@ -331,10 +335,16 @@ class InventoryBackupManager(
     }
 
     private suspend fun org.apache.poi.ss.usermodel.Sheet?.toComponents(
-        previewImagesByRow: Map<Int, ImportedSheetImage>
+        previewImagesByRow: Map<Int, ImportedSheetImage>,
+        onComponentsProgress: ((processed: Int, total: Int) -> Unit)? = null
     ): List<ImportedComponentRow> {
         val sheet = this ?: return emptyList()
-        return sheet.dataRows().map { row ->
+        val rows = sheet.dataRows()
+        val totalComponents = rows.size
+        if (totalComponents > 0) {
+            onComponentsProgress?.invoke(0, totalComponents)
+        }
+        return rows.mapIndexed { index, row ->
             val partNumber = row.string("partNumber").orEmpty().trim().uppercase()
             val imageLocalPath = previewImagesByRow[row.rowIndex]
                 ?.takeIf { partNumber.isNotBlank() }
@@ -361,7 +371,9 @@ class InventoryBackupManager(
                     updatedAt = row.long("updatedAt")
                 ),
                 requiresEnrichment = false
-            )
+            ).also {
+                onComponentsProgress?.invoke(index + 1, totalComponents)
+            }
         }
     }
 
@@ -388,26 +400,25 @@ class InventoryBackupManager(
         return imagesByRow
     }
 
-    private fun specificationCount(specJson: String?): Int {
-        if (specJson.isNullOrBlank()) {
-            return 0
-        }
-        return runCatching {
-            val json = JSONObject(specJson)
-            json.keys().asSequence()
-                .map { key -> json.optString(key).trim() }
-                .count { value -> value.isNotBlank() && value != "null" }
-        }.getOrDefault(0)
-    }
-
     private fun requiresExportEnrichment(component: ComponentEntity): Boolean {
         val hasImage = component.imageLocalPath
             ?.let(::File)
             ?.let { it.exists() && it.length() > 0L }
             ?: false
-        return component.name.isNullOrBlank() ||
-            specificationCount(component.specJson) == 0 ||
-            !hasImage
+        return isValidExportPartNumber(component.partNumber) && !hasImage
+    }
+
+    private suspend fun enrichComponentForExportIfNeeded(component: ComponentEntity): ComponentEntity {
+        if (!requiresExportEnrichment(component)) {
+            return component
+        }
+        componentEnrichmentManager.enrichNow(listOf(component.partNumber))
+        return componentDao.findById(component.id) ?: component
+    }
+
+    private fun isValidExportPartNumber(partNumber: String?): Boolean {
+        val normalized = partNumber?.trim()?.uppercase().orEmpty()
+        return normalized.isNotBlank() && !normalized.startsWith("C0")
     }
 
     private fun insertComponentPreviewImage(

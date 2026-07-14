@@ -1,12 +1,19 @@
 <!--
  * @author: BC
  * @date: 26/04/01
- * @lastEditTime: 26/06/03
+ * @lastEditTime: 26/07/13
  * @description: 
  * @note: 
  * @version: 0.1.0
 -->
 
+# V1.5.0 26/07/13
+
+- MOD: 乐天: 修改删除库存按钮位置
+- ADD: 添加 tools/cli 脚本添加物料
+- MOD: 修改顶部文字位置，保持样式一致
+- MOD: 让关于部分文字可复制
+- ADD: Laputa: 增加导出库存时的进度条
 
 # V1.4.0 26/06/03
 
